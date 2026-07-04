@@ -1,0 +1,18 @@
+tools:
+  - class_name: "verl.tools.jupyter_notebook_tool.NotebookTool"
+    config:
+      kernel_name: "python3"
+      init_files_dir: /data/da-dev-tables
+      type: native
+    tool_schema:
+      type: "function"
+      function:
+        name: "jupyter_notebook"
+        description: "A tool for executing code."
+        parameters:
+          type: "object"
+          properties:
+            code:
+              type: "string"
+              description: "The code to execute."
+          required: ["code"]

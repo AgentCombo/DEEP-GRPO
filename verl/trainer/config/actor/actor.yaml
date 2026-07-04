@@ -1,0 +1,183 @@
+# Format checks enforced on CI:
+# 1. Comments must appear above each field.
+# 2. There must be a blank line between each field.
+# 3. Inline comments (after a field on the same line) are not allowed.
+# 4. Indentation level is respected for nested fields.
+
+# the abstract actor configs
+# fsdp, fsdp2 or megatron. must be set.
+strategy: ???
+
+# Split each sample into sub-batches of this size for PPO
+ppo_mini_batch_size: 256
+
+# [Deprecated] Global micro batch size
+ppo_micro_batch_size: null
+
+# Local per-GPU micro batch size
+ppo_micro_batch_size_per_gpu: null
+
+# Whether to automatically adjust batch size at runtime
+# oc.select: the default val for ref.log_prob_use_dynamic_bsz
+use_dynamic_bsz: false
+
+# Max tokens per GPU in one PPO batch; affects gradient accumulation
+# Typically it should be: n * ${data.max_prompt_length} + ${data.max_response_length}
+# oc.select: the default val for ref.log_prob_max_token_len_per_gpu
+ppo_max_token_len_per_gpu: 16384
+
+# PPO clip ratio
+clip_ratio: 0.2
+
+# Lower bound for asymmetric clipping (used in dual-clip PPO)
+clip_ratio_low: 0.2
+
+# Upper bound for asymmetric clipping (used in dual-clip PPO)
+clip_ratio_high: 0.2
+
+# policy loss config
+policy_loss:
+
+  # Loss function mode: vanilla / clip-cov / kl-cov /gpg from https://arxiv.org/abs/2505.22617
+  loss_mode: "vanilla"
+  
+  # Ratio of tokens to be clipped for clip-cov loss
+  clip_cov_ratio: 0.0002
+
+  # Lower bound for clip-cov loss
+  clip_cov_lb: 1.0
+
+  # Upper bound for clip-cov loss
+  clip_cov_ub: 5.0
+
+  # Ratio of tokens to be applied kl penalty for kl-cov loss
+  kl_cov_ratio: 0.0002
+
+  # KL divergence penalty coefficient
+  ppo_kl_coef: 0.1
+
+# Constant C in Dual-clip PPO; clips when advantage < 0 and ratio > C
+clip_ratio_c: 3.0
+
+# Loss aggregation mode: "token-mean", "seq-mean-token-sum", or "seq-mean-token-mean"
+loss_agg_mode: token-mean
+
+# Entropy regularization coefficient in PPO loss
+entropy_coeff: 0
+
+# Whether to use KL loss instead of KL reward penalty. True for GRPO
+use_kl_loss: false
+
+# DEEP-GRPO loss config
+deep_grpo:
+# Weight for branch chain (model branches) loss
+  branch_chain_loss_lambda: 1.0
+# Teacher loss type for off-policy teacher suffix tokens.
+# null = no teacher loss (standard PPO, teacher tokens not expected).
+# "sft" = NLL loss on teacher tokens, ignoring advantages.
+# "luffy" = LUFFY policy shaping f(π_θ)·Â on teacher tokens.
+# "snis" = self-normalized weighted NLL: -sg[w̃]·logπ where
+#   w̃ = exp(A*/β) / mean_j exp(A_j/β) over the mixed group (students+teacher).
+#   Weight is computed at attach time and shipped via the advantages field.
+  teacher_loss_type: null
+# Teacher update mode.
+# "joint" = add teacher loss to PPO mini-batches.
+# "post_ppo" = run separate SFT optimizer steps after PPO updates.
+  teacher_update_mode: joint
+# Weight for joint teacher loss (applies to both SFT and LUFFY modes).
+# Ignored when teacher_update_mode="post_ppo"; post-PPO SFT uses the separate
+# teacher_sft_optim optimizer below.
+# When auto_teacher_loss_coef=true, this becomes a relative weight (1.0 = equal to PPO).
+  teacher_loss_coef: 1.0
+# Reduction for joint teacher loss.
+# "separate_stream_mean" preserves the legacy objective:
+#   mean(PPO student tokens) + teacher_loss_coef * mean(teacher tokens).
+# "mixed_token_mean" uses one unified token-level objective for LUFFY:
+#   sum(student PPO token losses + teacher LUFFY token losses) / all valid tokens.
+  teacher_loss_reduction: separate_stream_mean
+# If true, dynamically scale teacher loss to match PPO loss magnitude per step.
+  auto_teacher_loss_coef: false
+# Teacher samples per post-PPO SFT mini-batch.
+# If teacher_allow_partial_batch=false and total teacher samples are below this,
+# skip teacher SFT for the step.
+  teacher_mini_batch_size: 64
+# If true with teacher_update_mode="post_ppo", run a final smaller teacher SFT
+# mini-batch instead of skipping teacher samples below teacher_mini_batch_size.
+  teacher_allow_partial_batch: false
+# Separate optimizer for teacher SFT steps when teacher_update_mode="post_ppo".
+# Null fields inherit from actor.optim.
+  teacher_sft_optim:
+
+    # Learning rate for post-PPO teacher SFT steps
+    lr: null
+
+    # Weight decay for post-PPO teacher SFT steps
+    weight_decay: null
+
+    # Adam betas for post-PPO teacher SFT steps
+    betas: null
+# LUFFY policy shaping gamma (only used when teacher_loss_type="luffy").
+# 0.1 = LUFFY paper default. Smaller values amplify low-prob tokens more.
+  luffy_gamma: 0.1
+# SNIS curriculum temperature β (only used when teacher_loss_type="snis").
+# Controls how sharply teacher weight rises on hard (low group-mean) nodes:
+# w̃ ≤ exp(ΔR_max/β); β→∞ uniform weak teaching, β→0 teach only all-fail groups.
+# Declared choice, not derived. Default 1.0.
+  snis_beta: 1.0
+
+# Whether to use torch.compile()
+# oc.select: the default val for ref.use_torch_compile
+use_torch_compile: true
+
+# KL loss coefficient when use_kl_loss is enabled. For GRPO
+kl_loss_coef: 0.001
+
+# Type of KL divergence loss. Options: "kl"(k1), "abs", "mse"(k2), "low_var_kl"(k3), "full"
+kl_loss_type: low_var_kl
+
+# Number of PPO epochs per batch
+ppo_epochs: 1
+
+# Shuffle training data across PPO epochs
+shuffle: false
+
+# checkpoint configs
+checkpoint:
+
+  # What to include in saved checkpoints
+  # with 'hf_model' you can save whole model as hf format, now only use sharded model checkpoint to save space
+  save_contents: ['model', 'optimizer', 'extra']
+
+  # For more flexibility, you can specify the contents to load from the checkpoint.
+  # .xxx refers to the local variable xxx from the same level of hierarchy similar to python pkg
+  load_contents: ${.save_contents}
+
+# optimizer configs
+optim:
+
+  # Learning rate
+  lr: 1e-6
+
+  # Warmup steps ratio (used if lr_warmup_steps is negative)
+  lr_warmup_steps_ratio: 0.0
+
+  # Total training steps (must be overridden at runtime)
+  total_training_steps: -1
+
+  # Weight decay
+  weight_decay: 0.01
+
+# profiler configs
+profiler:
+
+  # Required when using verl.utils.omega_conf_to_dataclass to instantiate dataclass configs in the entrypoint
+  _target_: verl.utils.profiler.ProfilerConfig
+
+  # True for each task has its own database, False for all tasks in one training step share one database.
+  discrete: False
+
+  # Whether to profile all ranks.
+  all_ranks: False
+
+  # The ranks that will be profiled. [] or [0,1,...]
+  ranks: []

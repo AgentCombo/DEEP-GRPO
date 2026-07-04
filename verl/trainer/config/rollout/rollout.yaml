@@ -1,0 +1,302 @@
+# actor_rollout_ref.rollout.name: hf/vllm/sglang.
+name: vllm
+
+# sync: LLM, async: AsyncLLM
+mode: sync
+
+# Sampling temperature for rollout.
+temperature: 1.0
+
+# Top-k sampling parameter. -1 for vLLM rollout, 0 for HF rollout.
+top_k: -1
+
+# Top-p sampling parameter. Default 1.0.
+top_p: 1
+
+# typically the same as data max prompt length
+# same as data.max_prompt_length if it exists
+prompt_length: ${oc.select:data.max_prompt_length,512}
+
+# typically the same as data max response length
+# same as data.max_response_length if it exists
+response_length: ${oc.select:data.max_response_length,512}
+
+# for vllm rollout
+# Rollout model parameters type. Align with actor model's FSDP/Megatron type.
+dtype: bfloat16
+
+# Fraction of GPU memory used by vLLM/SGLang for KV cache.
+gpu_memory_utilization: 0.5
+
+# Whether to ignore EOS and continue generating after EOS is hit.
+ignore_eos: False
+
+# Whether to disable CUDA graph. Default True to allow cache freeing.
+enforce_eager: True
+
+# Whether to free engine KVCache after generation. Set enforce_eager=True when enabled.
+free_cache_engine: True
+
+# TP size for rollout. Not effective for hf
+tensor_model_parallel_size: 2
+
+# max number of tokens in a batch
+max_num_batched_tokens: 8192
+
+# max length for rollout
+max_model_len: null
+
+# max length of sequences
+max_num_seqs: 1024
+
+# [Will be deprecated, use log_prob_micro_batch_size_per_gpu] The batch size for one forward pass in the computation of log_prob. Global batch size.
+log_prob_micro_batch_size: null
+
+# The batch size for one forward pass in the computation of log_prob. Local batch size per GPU.
+log_prob_micro_batch_size_per_gpu: null
+
+# enable dynamic batch size (sequence packing) for log_prob computation
+# same as actor_rollout_ref.actor.use_dynamic_bsz if it exists, otherwise false
+log_prob_use_dynamic_bsz: ${oc.select:actor_rollout_ref.actor.use_dynamic_bsz,false}
+
+# max token length for log_prob computation
+# same as actor_rollout_ref.actor.ppo_max_token_len_per_gpu if it exists, otherwise 16384
+log_prob_max_token_len_per_gpu: ${oc.select:actor_rollout_ref.actor.ppo_max_token_len_per_gpu,16384}
+
+# disable logging statistics
+disable_log_stats: True
+
+# for hf rollout
+# Whether to sample during training rollout. False uses greedy sampling.
+do_sample: True
+
+# number of responses (i.e. num sample times). > 1 for grpo
+n: 1
+
+# Whether to wake up inference engine in multi-stage. (Wake up model weights first, then resume kv cache)
+multi_stage_wake_up: false
+
+# Extra inference engine arguments (vllm, sglang).
+engine_kwargs:
+
+  # for vllm
+  vllm:
+
+    # Swap space (in GB) used by inference engine. null uses default (e.g., 4 GB).
+    swap_space: null
+
+    # Whether to disable the preprocessor cache for multimodel models.
+    disable_mm_preprocessor_cache: False
+
+  # for sglang
+  sglang:
+
+    # The attention backend for sglang engine. Options: flashinfer, triton, flashmla, null for default.
+    attention_backend: null
+
+# Sampling parameters used during validation.
+val_kwargs:
+
+  # sampling parameters for validation
+  # Top-k sampling parameter. -1 for vLLM rollout, 0 for HF rollout.
+  top_k: -1
+
+  # Top-p sampling parameter. Default 1.0.
+  top_p: 1.0
+
+  # Sampling temperature for rollout.
+  temperature: 0
+
+  # whether to repeat n times for validation
+  n: 1
+
+  # Whether to sample during training rollout. False uses greedy sampling.
+  do_sample: False
+
+# Multi-turn interaction config for tools or chat.
+multi_turn:
+
+  # set to True for multi-turn tool interaction tasks; should set rollout.name to sglang as well
+  enable: False
+
+  # null for no limit (default max_length // 3)
+  max_assistant_turns: null
+
+  # null for no tool
+  tool_config_path: null
+
+  # null for no limit (default max_length // 3)
+  max_user_turns: null
+
+  # max parallel call for tools in single turn
+  max_parallel_calls: 1
+
+  # max length of tool response
+  max_tool_response_length: 1024
+
+  # truncate side of tool response: left, middle, right
+  tool_response_truncate_side: middle
+
+  # null for no interaction
+  interaction_config_path: null
+
+  # null for default callback
+  completion_callback: null
+
+  # - When set to True, the model's default chat template is used for multi-turn rollout, which typically matches production behavior.
+  # - When set to False, the token ids recorded for training are used instead; unlike the default chat template, these always include the model's full output,
+  #   which may contain additional content such as reasoning content. This maintains the consistency between training and rollout, but it will lead to longer prompts.
+  use_inference_chat_template: False
+
+  # Tokenization is performed turn by turn and the resulting token ids are concatenated to form the full conversation.
+  # To ensure this matches the result of tokenizing the entire conversation at once, a sanity check is run at the end of each multi-turn rollout to compare the two sets of token ids.
+  # Some models are known to produce different tokenization results when tokenizing turn by turn vs. all at once. aThis behavior has already been validated for them.
+  # To reduce excessive warnings, you can turn off the sanity check for these models if you are using their default chat template:
+  # Qwen/QwQ-32B, Qwen/Qwen3-xxB
+  # - disable: disable tokenization sanity check
+  # - strict: enable strict tokenization sanity check (default)
+  # - ignore_strippable: ignore strippable tokens when checking tokenization sanity
+  tokenization_sanity_check_mode: strict
+
+  # Format of the multi-turn interaction. Options: hermes, llama3_json, ...
+  format: hermes
+
+# support logging rollout prob for debugging purpose
+calculate_log_probs: False
+
+# profiler configs
+profiler:
+
+  # Required when using verl.utils.omega_conf_to_dataclass to instantiate dataclass configs in the entrypoint
+  _target_: verl.utils.profiler.ProfilerConfig
+
+  # True for each task has its own database, False for all tasks in one training step share one database.
+  discrete: False
+
+  # Whether to profile all ranks.
+  all_ranks: False
+
+  # The ranks that will be profiled. [] or [0,1,...]
+  ranks: []
+
+# [Experimental] agent loop based rollout configs
+agent:
+
+  # Number of agent loop workers
+  num_workers: 8
+
+  # custom async server configs
+  custom_async_server:
+
+    # Path to the custom async server implementation
+    path: null
+
+    # Class name of the custom async server class (e.g. AsyncvLLMServer)
+    name: null
+
+deep_grpo:
+  default_agent_name: reasoning_agent_loop
+  segment_method: tp      # tp (token count), sp (sentence), fp (fixed count)
+  tokens_per_node: 50     # for segment_method=tp
+  n_segments: 5           # for segment_method=fp
+  teacher_model_name: Qwen3-235B-A22B-Instruct-2507-AWQ
+  expand_branch_chain: False
+  expand_only_on_low_quality: True
+  low_quality_trajectory_reward_threshold: 0.0
+  branches_per_point: 8
+  pick_branch_chain_root_method: utility
+  n_branch_points: 1
+  utility_sampling:
+    prob_model_type: logistic
+    window_size: 10000
+    position_bias: 2.0
+  # TreeRL baseline (default_agent_name=treerl_agent_loop): EPTree sampling params
+  treerl:
+    M: 6    # initial chains per tree
+    N: 2    # forking points per iteration
+    L: 1    # expansion iterations
+    T: 2    # branching factor at each fork
+  # One-stage mode: decouple branch generation from main chain via buffer
+  one_stage_mode: false
+  branch_point_buffer:
+    max_size: 10000
+    max_age: 8
+    # Tune so that sample_size_per_step * branches_per_entry ≈ batch_size * rollout_n
+    sample_size_per_step: 32
+    branches_per_entry: 4
+    sampling_strategy: stratified
+  # Teacher-guided suffix synthesis: background teacher annotation for branch entries
+  teacher_suffix_synthesis:
+    enabled: false
+    branch_batch_threshold: 128
+    branches_per_entry: 4
+    sampling_strategy: stratified
+    failed_pool_max_size: 10000
+    failed_pool_max_age: 5
+    annotated_pool_max_size: 10000
+    max_concurrent_annotations: 64
+    min_prefix_match_tokens: 10
+    min_prefix_match_ratio: 0.05
+    poll_interval: 2.0
+    comparison_log_freq: 20
+    comparison_log_samples: 20
+  # Prefix-inject mode: treat teacher-located first-error position as a new
+  # "prompt" (= original + locked_prefix) and append to regular dataloader
+  # batch. Mutually exclusive with teacher_suffix_synthesis.enabled.
+  prefix_inject_mode:
+    enabled: false
+    # Pool backend:
+    #   flat  — legacy SyntheticPromptPool (one entry per annotated failure);
+    #           sampled with variance weighting and per-prompt diversity cap.
+    #   chain — PrefixChainPool: one linear chain per hard prompt with N₀ at
+    #           depth 0 (original prompt). Explicit state machine drives
+    #           deepening / retreat / graduation. Zero tunable knobs beyond
+    #           injection_ratio; depth bounded by max_model_len.
+    pool_type: flat
+    injection_ratio: 0.25    # fraction of train_batch_size to fill from pool
+    # Rollouts per injected prefix prompt. null means reuse rollout.n, preserving
+    # the historical behavior where original prompts and prefix prompts share K.
+    rollout_n: null
+    max_per_prompt: 3        # flat-only: per-prompt cap at selection time
+    # Forest-only suffix SFT replay. Teacher-expanded active non-root nodes with
+    # a stored teacher suffix are replayed as post-PPO teacher-only SFT samples.
+    # Nodes never mature out; they stay eligible while active.
+    suffix_sft_maturation:
+      enabled: false
+      # post_step: existing per-PPO-step replay; epoch_local: freeze suffixes at
+      # each dataloader epoch boundary, clear teacher events, then run SFT passes.
+      schedule: post_step
+      epoch_passes: 5
+      max_batches_per_step: 1
+      # Hard-state SFT replay samples at most one node per tree per mini-batch.
+      max_nodes_per_tree_per_step: 1
+    # Forest-only teacher continuations. Verified teacher suffixes stored on
+    # sampled forest nodes are replayed as off-policy teacher rows mixed into
+    # the joint PPO update (requires teacher_update_mode=joint,
+    # teacher_loss_reduction=mixed_token_mean, and teacher_loss_type in
+    # ('luffy', 'snis') — or null for the baseline-only ablation arm).
+    # Mutually exclusive with suffix_sft_maturation.enabled.
+    teacher_continuation:
+      enabled: false
+    # Diagnostic-only paired eval for forest mode. When enabled, replay a few
+    # sampled non-root hard prompts from the original root and log root-vs-prefix
+    # success rates. These diagnostic root rollouts are filtered before training.
+    paired_eval:
+      enabled: false
+      freq: 50
+      num_pairs: 4
+    # Diagnostic-only JSONL dump for sampled forest prefixes. When enabled,
+    # writes prompt/prefix text plus rollout responses and rewards for a small
+    # number of injected entries. If dir is null, files go under
+    # trainer.default_local_dir/prefix_debug.
+    debug_dump:
+      enabled: false
+      dir: null
+      freq: 50
+      max_prefixes: 16
+      max_deeper_examples: 4
+      max_rollouts_per_prefix: 8
+      max_text_chars: 4000
+      full_text: false
+      include_token_ids: false
+      max_token_ids: 256

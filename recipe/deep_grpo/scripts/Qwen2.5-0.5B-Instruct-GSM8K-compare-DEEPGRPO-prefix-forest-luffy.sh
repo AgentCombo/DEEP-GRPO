@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+export SUFFIX_SFT_ENABLED=${SUFFIX_SFT_ENABLED:-False}
+export PREFIX_TEACHER_CONTINUATION_ENABLED=${PREFIX_TEACHER_CONTINUATION_ENABLED:-True}
+export TEACHER_LOSS_TYPE=${TEACHER_LOSS_TYPE:-luffy}
+export TEACHER_UPDATE_MODE=${TEACHER_UPDATE_MODE:-joint}
+export TEACHER_LOSS_COEF=${TEACHER_LOSS_COEF:-1.0}
+export TEACHER_LOSS_REDUCTION=${TEACHER_LOSS_REDUCTION:-mixed_token_mean}
+export LUFFY_GAMMA=${LUFFY_GAMMA:-0.1}
+
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+export RUN_NAME=${RUN_NAME:-Qwen0.5B-GSM8K-pforest-LUFFY-mixedToken-r${INJECTION_RATIO:-0.125}-${TIMESTAMP}}
+
+exec bash "$SCRIPT_DIR/Qwen2.5-0.5B-Instruct-GSM8K-compare-DEEPGRPO-prefix-forest.sh"
