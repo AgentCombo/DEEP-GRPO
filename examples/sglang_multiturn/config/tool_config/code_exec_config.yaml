@@ -1,0 +1,23 @@
+tools:
+  - class_name: "verl.tools.code_exec_tool.CodeExecTool"
+    config:
+      kernel_name: "python3"
+      max_concurrency: 32
+      base_workdir: "/tmp/agent_code"
+      timeout: 30
+      python_exec: "/data/miniconda3/envs/verl/bin/python"
+      init_files_base_dir: "/data/InfiAgent/examples/DA-Agent/data/da-dev-tables"
+      type: native
+
+    tool_schema:
+      type: "function"
+      function:
+        name: "code_exec"
+        description: "A tool for executing code. You must explicitly use print to display the execution result."
+        parameters:
+          type: "object"
+          properties:
+            code:
+              type: "string"
+              description: "The code to execute."
+          required: ["code"]
